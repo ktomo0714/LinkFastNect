@@ -9,4 +9,3 @@ numpy==2.3.2
 python-dateutil==2.9.0
 pymysql==1.1.1
 cryptography==44.0.0
-EOF
