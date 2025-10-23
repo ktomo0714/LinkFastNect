@@ -11,12 +11,13 @@ base_path = Path(__file__).parents[1]  # backendディレクトリへのパス
 env_path = base_path / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# データベース接続情報
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST')
+# データベース接続情報（Azure App Service対応）
+# Azure App Serviceでは APPSETTING_ プレフィックス付きの環境変数も確認
+DB_USER = os.getenv('DB_USER') or os.getenv('APPSETTING_DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD') or os.getenv('APPSETTING_DB_PASSWORD')
+DB_HOST = os.getenv('DB_HOST') or os.getenv('APPSETTING_DB_HOST', 'rdbs-002-gen10-step3-2-oshima5.mysql.database.azure.com')
 DB_PORT = os.getenv('DB_PORT', '3306')
-DB_NAME = os.getenv('DB_NAME')
+DB_NAME = os.getenv('DB_NAME') or os.getenv('APPSETTING_DB_NAME', 'kondo-pos')
 
 # 環境変数の検証
 missing_vars = []
@@ -33,8 +34,17 @@ if missing_vars:
     error_msg = f"❌ 必須の環境変数が設定されていません: {', '.join(missing_vars)}"
     print(error_msg)
     print("Azure App Serviceの「構成」→「アプリケーション設定」で以下の環境変数を設定してください:")
+    print("通常の環境変数:")
     for var in missing_vars:
         print(f"  - {var}")
+    print("または、APPSETTING_プレフィックス付き:")
+    for var in missing_vars:
+        print(f"  - APPSETTING_{var}")
+    print("\n推奨設定:")
+    print("  - DB_USER: tech0gen10student")
+    print("  - DB_PASSWORD: [データベースのパスワード]")
+    print("  - DB_HOST: rdbs-002-gen10-step3-2-oshima5.mysql.database.azure.com")
+    print("  - DB_NAME: kondo-pos")
     # 環境変数が設定されていない場合でもアプリケーションは起動させる
     # （ヘルスチェックで状態を確認できるように）
     DB_USER = DB_USER or 'dummy'
