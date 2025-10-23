@@ -35,10 +35,24 @@ jobs:
 
       - name: Create deployment package
         run: |
-          # Azure App Service用のファイルをコピー
-          cp startup.sh .
+          # 必要なファイルの存在確認
+          echo "Checking required files..."
+          ls -la startup.sh gunicorn.conf.py app.py
+          
           # デプロイパッケージを作成
-          zip -r deploy.zip . -x '*.git*' -x '*venv*' -x '*.env*' -x '*__pycache__*' -x '*.github*'
+          echo "Creating deployment package..."
+          zip -r deploy.zip . \
+            -x '*.git*' \
+            -x '*venv*' \
+            -x '*.env*' \
+            -x '*__pycache__*' \
+            -x '*.github*' \
+            -x '*.pytest_cache*' \
+            -x '*.coverage*'
+          
+          # パッケージ内容の確認
+          echo "Package contents:"
+          unzip -l deploy.zip | head -20
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
@@ -60,7 +74,19 @@ jobs:
           name: python-app
 
       - name: Unzip artifact for deployment
-        run: unzip deploy.zip
+        run: |
+          echo "Unzipping deployment package..."
+          unzip deploy.zip
+          echo "Deployment files extracted:"
+          ls -la
+
+      - name: Verify deployment files
+        run: |
+          echo "Verifying critical files..."
+          test -f app.py && echo "✓ app.py found" || echo "✗ app.py missing"
+          test -f startup.sh && echo "✓ startup.sh found" || echo "✗ startup.sh missing"
+          test -f gunicorn.conf.py && echo "✓ gunicorn.conf.py found" || echo "✗ gunicorn.conf.py missing"
+          test -f requirements.txt && echo "✓ requirements.txt found" || echo "✗ requirements.txt missing"
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
