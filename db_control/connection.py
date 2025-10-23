@@ -1,9 +1,10 @@
-﻿import os
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 import urllib.parse
+import sys
 
 # 環境変数の読み込み
 base_path = Path(__file__).parents[1]  # backendディレクトリへのパス
@@ -17,11 +18,35 @@ DB_HOST = os.getenv('DB_HOST')
 DB_PORT = os.getenv('DB_PORT', '3306')
 DB_NAME = os.getenv('DB_NAME')
 
+# 環境変数の検証
+missing_vars = []
+if not DB_USER:
+    missing_vars.append('DB_USER')
+if not DB_PASSWORD:
+    missing_vars.append('DB_PASSWORD')
+if not DB_HOST:
+    missing_vars.append('DB_HOST')
+if not DB_NAME:
+    missing_vars.append('DB_NAME')
+
+if missing_vars:
+    error_msg = f"❌ 必須の環境変数が設定されていません: {', '.join(missing_vars)}"
+    print(error_msg)
+    print("Azure App Serviceの「構成」→「アプリケーション設定」で以下の環境変数を設定してください:")
+    for var in missing_vars:
+        print(f"  - {var}")
+    # 環境変数が設定されていない場合でもアプリケーションは起動させる
+    # （ヘルスチェックで状態を確認できるように）
+    DB_USER = DB_USER or 'dummy'
+    DB_PASSWORD = DB_PASSWORD or 'dummy'
+    DB_HOST = DB_HOST or 'localhost'
+    DB_NAME = DB_NAME or 'dummy'
+
 # SSL証明書のパス（Azure Database for MySQLで必要）
 ssl_cert_path = base_path / 'DigiCertGlobalRootG2.crt.pem'
 
 # パスワードをURLエンコード
-encoded_password = urllib.parse.quote_plus(DB_PASSWORD)
+encoded_password = urllib.parse.quote_plus(DB_PASSWORD) if DB_PASSWORD else ''
 
 # MySQLのURL構築
 DATABASE_URL = (
@@ -71,6 +96,10 @@ SessionLocal = sessionmaker(
 def test_connection():
     """データベース接続をテストする"""
     try:
+        print(f"🔄 データベース接続テスト中...")
+        print(f"   接続情報: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+        print(f"   SSL証明書: {'有効' if ssl_cert_path.exists() else '無効'}")
+        
         with engine.connect() as connection:
             result = connection.execute(text("SELECT VERSION() as version"))
             version = result.fetchone()
@@ -84,8 +113,15 @@ def test_connection():
             
             return True
     except Exception as e:
-        print(f"❌ データベース接続エラー: {e}")
+        print(f"❌ データベース接続エラー:")
+        print(f"   エラー内容: {str(e)}")
+        print(f"   エラータイプ: {type(e).__name__}")
         print(f"   接続情報: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+        print(f"\n💡 トラブルシューティング:")
+        print(f"   1. Azure App Serviceの「構成」→「アプリケーション設定」で環境変数を確認")
+        print(f"   2. データベースのファイアウォール設定を確認（Azure portalで許可されているか）")
+        print(f"   3. データベースの接続文字列が正しいか確認")
+        print(f"   4. SSL証明書のパスが正しいか確認: {ssl_cert_path}")
         return False
 
 def get_db():
