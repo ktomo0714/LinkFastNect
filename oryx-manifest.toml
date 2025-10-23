@@ -1,0 +1,12 @@
+# Oryx build manifest for Azure App Service
+[build]
+languageName = "python"
+languageVersion = "3.12"
+
+[run]
+appType = "python"
+virtualEnvName = "antenv"
+packageDirectory = "__oryx_packages__"
+
+[metadata]
+build-time = "placeholder"
