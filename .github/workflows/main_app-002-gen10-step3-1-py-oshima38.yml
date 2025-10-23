@@ -23,14 +23,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Create and activate virtual environment
+      - name: Install dependencies (no virtual environment)
         run: |
-          python -m venv antenv
-          source antenv/bin/activate
-
-      - name: Install dependencies
-        run: |
-          source antenv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
@@ -40,19 +34,23 @@ jobs:
           echo "Checking required files..."
           ls -la startup.sh gunicorn.conf.py app.py requirements.txt
           
-          # 仮想環境を含めてデプロイパッケージを作成
-          echo "Creating deployment package with virtual environment..."
+          # シンプルなデプロイパッケージを作成（仮想環境は除外）
+          echo "Creating deployment package..."
           zip -r deploy.zip . \
             -x '*.git*' \
+            -x '*venv*' \
+            -x '*antenv*' \
             -x '*.env*' \
             -x '*__pycache__*' \
             -x '*.github*' \
             -x '*.pytest_cache*' \
             -x '*.coverage*'
           
-          # パッケージ内容の確認
-          echo "Package contents:"
-          unzip -l deploy.zip | head -30
+          # パッケージサイズと内容の確認
+          echo "Package size:"
+          ls -lh deploy.zip
+          echo "Package contents (first 50 files):"
+          unzip -l deploy.zip | head -50
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
