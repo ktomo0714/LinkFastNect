@@ -3,14 +3,15 @@ import multiprocessing
 import os
 
 # Server socket
-bind = "0.0.0.0:8000"
+port = int(os.getenv('WEBSITES_PORT', '8000'))
+bind = f"0.0.0.0:{port}"
 backlog = 2048
 
-# Worker processes
-workers = min(multiprocessing.cpu_count() * 2 + 1, 4)
+# Worker processes (Azure App Service用に調整)
+workers = min(multiprocessing.cpu_count(), 2)  # Azure App Service用に制限
 worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
-timeout = 120
+timeout = 300  # Azure App Service用に延長
 keepalive = 2
 
 # Restart workers after this many requests, to help prevent memory leaks
@@ -37,6 +38,9 @@ tmp_upload_dir = None
 keyfile = None
 certfile = None
 
+# Preload application for better performance
+preload_app = True
+
 # Environment variables
 raw_env = [
     f"DB_USER={os.getenv('DB_USER', '')}",
@@ -44,4 +48,5 @@ raw_env = [
     f"DB_HOST={os.getenv('DB_HOST', '')}",
     f"DB_PORT={os.getenv('DB_PORT', '3306')}",
     f"DB_NAME={os.getenv('DB_NAME', '')}",
+    f"WEBSITES_PORT={port}",
 ]
