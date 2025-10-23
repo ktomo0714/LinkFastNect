@@ -41,7 +41,33 @@ async def lifespan(app: FastAPI):
 # FastAPIアプリケーションの初期化
 app = FastAPI(
     title="POS System API",
-    description="POSシステム バックエンドAPI",
+    description="""
+    POSシステム バックエンドAPI（仕様書準拠）
+    
+    ## 主要APIファンクション（Lv1）
+    
+    ### 1. 商品マスタ検索
+    - **エンドポイント**: `GET /api/product-search`
+    - **パラメータ**: コード（商品コード）
+    - **リターン**: 商品情報（商品一意キー/商品コード/商品名称/商品単価）
+    - **処理内容**: パラメータのコードに一致する商品コードの商品を1件返す。対象が見つからなかった場合はNULL情報を返す。
+    
+    ### 2. 購入
+    - **エンドポイント**: `POST /api/purchase`
+    - **パラメータ**: レジ担当者コード、店舗コード、POS機ID、商品リスト
+    - **リターン**: 成否（True/False）、合計金額
+    - **処理内容**: 
+        1. 取引テーブルへ登録
+        2. 取引明細へ登録
+        3. 合計を計算
+        4. 取引テーブルを更新
+        5. 合計金額をフロントへ返す
+    
+    ## データベース仕様
+    - **商品マスタ**: PRD_ID（PK）、CODE（UNIQUE）、NAME、PRICE
+    - **取引**: TRD_ID（PK）、DATETIME、EMP_CD、STORE_CD（固定値：30）、POS_NO（固定値：90）、TOTAL_AMT
+    - **取引明細**: TRD_ID（PK/FK）、DTL_ID（PK）、PRD_ID（FK）、PRD_CODE、PRD_NAME、PRD_PRICE
+    """,
     version="1.0.0",
     lifespan=lifespan
 )
@@ -104,6 +130,20 @@ class TransactionCreate(BaseModel):
     store_cd: str = Field(default="30", max_length=5)
     pos_no: str = Field(default="90", max_length=3)
     details: List[TransactionDetailCreate]
+
+
+class PurchaseRequest(BaseModel):
+    """購入リクエスト（仕様書準拠）"""
+    emp_cd: str = Field(default="9999999999", max_length=10, description="レジ担当者コード")
+    store_cd: str = Field(default="30", max_length=5, description="店舗コード")
+    pos_no: str = Field(default="90", max_length=3, description="POS機ID")
+    products: List[TransactionDetailCreate]  # 商品リスト
+
+
+class PurchaseResponse(BaseModel):
+    """購入レスポンス（仕様書準拠）"""
+    success: bool  # 成否（True/False）
+    total_amount: int  # 合計金額
 
 
 class SalesStatistics(BaseModel):
@@ -173,7 +213,7 @@ async def get_product(product_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/products/code/{code}", response_model=ProductResponse)
 async def get_product_by_code(code: str, db: Session = Depends(get_db)):
-    """商品コードで商品取得"""
+    """商品コードで商品取得（仕様書準拠）"""
     product = db.query(ProductMaster).filter(
         ProductMaster.code == code
     ).first()
@@ -182,6 +222,41 @@ async def get_product_by_code(code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="商品が見つかりません")
     
     return product
+
+
+# ===== 仕様書準拠のAPIファンクション =====
+
+class ProductSearchResponse(BaseModel):
+    """商品マスタ検索の戻り値（仕様書準拠）"""
+    prd_id: int  # 商品一意キー
+    code: str    # 商品コード
+    name: str    # 商品名称
+    price: int   # 商品単価
+
+
+@app.get("/api/product-search", response_model=Optional[ProductSearchResponse])
+async def search_product_by_code(
+    code: str = Query(..., description="商品コード"),
+    db: Session = Depends(get_db)
+):
+    """
+    商品マスタ検索（仕様書準拠）
+    パラメータ: コード（商品コード）
+    リターン: 商品情報（商品一意キー/商品コード/商品名称/商品単価）
+    """
+    product = db.query(ProductMaster).filter(
+        ProductMaster.code == code
+    ).first()
+    
+    if not product:
+        return None  # 仕様書の1-e1: 対象が見つからなかった場合はNULL情報を返す
+    
+    return ProductSearchResponse(
+        prd_id=product.prd_id,
+        code=product.code,
+        name=product.name,
+        price=product.price
+    )
 
 
 @app.post("/api/products", response_model=ProductResponse)
@@ -344,6 +419,69 @@ async def create_transaction(
     db.refresh(transaction)
     
     return transaction
+
+
+@app.post("/api/purchase", response_model=PurchaseResponse)
+async def purchase(
+    purchase_data: PurchaseRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    購入（仕様書準拠）
+    パラメータ: レジ担当者コード、店舗コード、POS機ID、商品リスト
+    リターン: 成否（True/False）、合計金額
+    """
+    try:
+        if not purchase_data.products:
+            return PurchaseResponse(success=False, total_amount=0)
+        
+        # 1-1: 取引テーブルへ登録する
+        transaction = Transaction(
+            datetime=datetime.now(),
+            emp_cd=purchase_data.emp_cd if purchase_data.emp_cd else "9999999999",
+            store_cd="30",  # 固定値
+            pos_no="90",    # 固定値（モバイルPOS）
+            total_amt=0
+        )
+        db.add(transaction)
+        db.flush()  # 取引一意キーを取得するため
+        
+        # 1-2: 取引明細へ登録する
+        total_amount = 0
+        for idx, product_data in enumerate(purchase_data.products, start=1):
+            # 商品存在チェック
+            product = db.query(ProductMaster).filter(
+                ProductMaster.prd_id == product_data.prd_id
+            ).first()
+            
+            if not product:
+                db.rollback()
+                return PurchaseResponse(success=False, total_amount=0)
+            
+            detail = TransactionDetail(
+                trd_id=transaction.trd_id,
+                dtl_id=idx,
+                prd_id=product_data.prd_id,
+                prd_code=product_data.prd_code,
+                prd_name=product_data.prd_name,
+                prd_price=product_data.prd_price
+            )
+            db.add(detail)
+            total_amount += product_data.prd_price
+        
+        # 1-3: 合計を計算する（V_合計金額）
+        # 1-4: 取引テーブルを更新する
+        transaction.total_amt = total_amount
+        
+        db.commit()
+        
+        # 1-5: 合計金額をフロントへ返す
+        return PurchaseResponse(success=True, total_amount=total_amount)
+        
+    except Exception as e:
+        db.rollback()
+        print(f"購入処理エラー: {e}")
+        return PurchaseResponse(success=False, total_amount=0)
 
 
 @app.delete("/api/transactions/{transaction_id}")
