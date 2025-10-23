@@ -1,0 +1,50 @@
+# Azure App Service スタートアップコマンド オプション
+
+以下のコマンドのいずれかをAzure Portal → App Service → 構成 → 全般設定 → スタートアップコマンドに設定してください。
+
+## オプション1: Uvicorn直接起動（最もシンプル、推奨）
+python -m uvicorn app:app --host 0.0.0.0 --port 8000 --log-level info
+
+## オプション2: Gunicorn with Uvicorn Worker（本番環境向け）
+python -m gunicorn -w 2 -k uvicorn.workers.UvicornWorker app:app --bind 0.0.0.0:8000 --timeout 300 --access-logfile - --error-logfile - --log-level info
+
+## オプション3: シンプルなスタートアップスクリプト
+bash simple_startup.sh
+
+## オプション4: カスタムスタートアップスクリプト（フルオプション）
+bash startup.sh
+
+## オプション5: Gunicorn with config file
+gunicorn -c gunicorn.conf.py app:app
+
+## オプション6: Python app直接起動
+python app.py
+
+## 推奨設定
+
+まず、オプション1を試してください。最もシンプルで確実です。
+
+1. スタートアップコマンドに以下を設定：
+   python -m uvicorn app:app --host 0.0.0.0 --port 8000 --log-level info
+
+2. 保存してApp Serviceを再起動
+
+3. ログストリームで起動状況を確認
+
+4. ヘルスチェックにアクセス：
+   https://app-002-gen10-step3-1-py-oshima38.azurewebsites.net/health
+
+## 環境変数の確認
+
+スタートアップコマンドを設定する前に、以下の環境変数が設定されていることを確認してください：
+
+必須：
+- DB_USER=tech0gen10student
+- DB_PASSWORD=[実際のパスワード]
+- DB_HOST=rdbs-002-gen10-step3-2-oshima5.mysql.database.azure.com
+- DB_NAME=kondo-pos
+- WEBSITES_PORT=8000
+
+推奨：
+- SCM_DO_BUILD_DURING_DEPLOYMENT=1
+- WEBSITES_CONTAINER_START_TIME_LIMIT=1800

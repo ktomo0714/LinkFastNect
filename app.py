@@ -635,11 +635,14 @@ if __name__ == "__main__":
     import uvicorn
     
     # 環境変数からポートを取得（Azure App Serviceではポート8000を使用）
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", os.getenv("WEBSITES_PORT", 8000)))
+    
+    print(f"Starting application on port {port}...")
     
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
         port=port,
-        reload=False  # 本番環境ではFalse
+        reload=False,  # 本番環境ではFalse
+        log_level="info"
     )
