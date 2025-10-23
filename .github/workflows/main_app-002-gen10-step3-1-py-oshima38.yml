@@ -32,11 +32,21 @@ jobs:
         run: |
           # 必要なファイルの存在確認
           echo "Checking required files..."
-          ls -la startup.sh gunicorn.conf.py app.py requirements.txt
+          ls -la startup.sh gunicorn.conf.py app.py requirements.txt azure_startup.sh
           
           # シンプルなデプロイパッケージを作成（仮想環境は除外）
           echo "Creating deployment package..."
-          zip -r deploy.zip . \
+          zip -r deploy.zip \
+            *.py \
+            *.sh \
+            *.md \
+            *.txt \
+            *.yml \
+            *.yaml \
+            *.json \
+            *.toml \
+            *.pem \
+            db_control/ \
             -x '*.git*' \
             -x '*venv*' \
             -x '*antenv*' \
@@ -49,8 +59,10 @@ jobs:
           # パッケージサイズと内容の確認
           echo "Package size:"
           ls -lh deploy.zip
-          echo "Package contents (first 50 files):"
-          unzip -l deploy.zip | head -50
+          echo "Package contents (showing .sh files):"
+          unzip -l deploy.zip | grep -E '\.(sh|py|txt)$'
+          echo "Total files in package:"
+          unzip -l deploy.zip | tail -1
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
