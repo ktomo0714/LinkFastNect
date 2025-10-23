@@ -52,5 +52,5 @@ logs/
 .coverage
 htmlcov/
 
-# Azure
-.azure/
+# Azure（ローカル設定ファイル）
+.azure/appsettings.json
